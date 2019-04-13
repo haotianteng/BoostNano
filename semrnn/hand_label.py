@@ -193,7 +193,7 @@ class SignalLabeler(QtWidgets.QMainWindow):
     def _read_fast5(self,file):
         with h5py.File(file,mode='r') as root:
             raw_signal = np.asarray(list(root['/Raw/Reads'].values())[0][('Signal')])  
-        return file,raw_signal
+        return file,raw_signal[::-1]
 
     def _save(self):
         #self.canvas.mpl_disconnect(self.cidmotion)
