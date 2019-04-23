@@ -26,6 +26,7 @@ import h5py
 import semrnn
 import numpy as np
 from shutil import copyfile
+from tqdm import tqdm
 
 def denoise(signal,max_std=5):
     signal = np.asarray(signal)
@@ -37,7 +38,7 @@ class SignalLabeler(QtWidgets.QMainWindow):
     def __init__(self,signal_folder=None,save_file=None):
         super().__init__()
         self._initUI()
-        self.ax.text(0.5, 0.5,'Press S to start.',
+        self.ax.text(0.5, 0.5,'Press S to start. Press R to review a result.',
              horizontalalignment='center',
              verticalalignment='center',
              transform = self.ax.transAxes)
@@ -50,11 +51,14 @@ class SignalLabeler(QtWidgets.QMainWindow):
         self.pos=[]
         self.signal_dir = signal_folder
         self.sig_iter=None
+        self.sig_div_dict={}
         self.signal=[]
+        self.sig_list=[]
         self.curr_file=None
         self.records=[]
         self.save=save_file
-        self.start = False
+        self.start=False
+        self.review=False
         self.cache_dir=os.path.join(os.path.dirname(semrnn.__file__),'cache')
         self.cache_file=os.path.join(self.cache_dir,'cache.csv')
         self.cache_size=1 #Auto save the result to cache file after this number of labeled.
@@ -84,7 +88,7 @@ class SignalLabeler(QtWidgets.QMainWindow):
 
     def _reinit(self):
         self.ax.clear()
-        self.ax.text(0.5, 0.5,'Press S to start.',
+        self.ax.text(0.5, 0.5,'Press S to start. Press R to review a result.',
              horizontalalignment='center',
              verticalalignment='center',
              transform = self.ax.transAxes)
@@ -94,13 +98,16 @@ class SignalLabeler(QtWidgets.QMainWindow):
         self.pos=[]
         self.signal_dir = None
         self.sig_iter=None
+        self.sig_div_dict={}
         self.signal=[]
+        self.sig_list=[]
         self.curr_file=None
         self.records=[]
         self.axvlines=[]
         self.cursor_line=None
         self.save=None
         self.start=False
+        self.review=False
         self.cache_fns=[]
 
     def refresh(self,xpos):
@@ -161,6 +168,7 @@ class SignalLabeler(QtWidgets.QMainWindow):
                 self.save = str(QFileDialog.getExistingDirectory(self, "Choose directory to save."))
             self._save()
             self._reinit()
+            
         elif event.key()==Qt.Key_S:
             if self.signal_dir==None:
                 self.signal_dir = str(QFileDialog.getExistingDirectory(self, "Select Signal Directory"))
@@ -168,6 +176,7 @@ class SignalLabeler(QtWidgets.QMainWindow):
                     self.signal_dir=None
                     return
             self._start()
+            
         elif event.key()==Qt.Key_X:
             #skip current signal file
             self.pos=[]
@@ -175,15 +184,45 @@ class SignalLabeler(QtWidgets.QMainWindow):
             self.curr_color=self.colors[0]
             axv_pairs=[]
             self.redraw(None,axv_pairs)
-
+            
+        elif event.key()==Qt.Key_R:
+            #Start review mode
+            read_file = str(QFileDialog.getOpenFileName(self, "Select result file to review",'./','CSV Files(*.csv)'))
+            self.save=read_file.split(',')[0][1:].strip("'")
+            if len(self.save) == 0:
+                return
+            self._review()
+            
+        elif event.key()==Qt.Key_D:
+            #Inspect next signal in review mode
+            if not self.review:
+                return
+            self.prev_file = self.curr_file
+            self.prev_signal = self.signal
+            self.next_signal()
+            self.pos=self.sig_div_dict[self.curr_file]
+            axv_pairs=[]
+            for idx,p in enumerate(self.pos):
+                axv_pairs.append((p,self.colors[idx]))
+            self.redraw(None,axv_pairs)
+        elif event.key()==Qt.Key_A:
+            #Inspect previous signal in review mode(can only go back once)
+            if not self.review:
+                return
+            self.curr_file=self.prev_file
+            self.signal=self.prev_signal
+            self.pos=self.sig_div_dict[self.curr_file]
+            axv_pairs=[]
+            for idx,p in enumerate(self.pos):
+                axv_pairs.append((p,self.colors[idx]))
+            self.redraw(None,axv_pairs)
+            
     def _iter_signals(self):
-        file_list=os.listdir(self.signal_dir)
-        for file in file_list:
+        for file in self.sig_list:
             if file.endswith('.signal'):
-                yield self._read_signal(os.path.join(self.signal_dir,file))
+                yield self._read_signal(file)
             elif file.endswith('.fast5'):
-                yield self._read_fast5(os.path.join(self.signal_dir,file))
-
+                yield self._read_fast5(file)
     def _read_signal(self,file):
         with open(file,'r') as f:
             for line in f:
@@ -213,6 +252,8 @@ class SignalLabeler(QtWidgets.QMainWindow):
             print("Already start a job")
             return
         print("Begin reading signal file list")
+        file_list=os.listdir(self.signal_dir)
+        self.sig_list = [os.path.join(self.signal_dir,x) for x in file_list]
         self.sig_iter=self._iter_signals()
         print("Try to read cache file.")
         if os.path.isfile(self.cache_file):
@@ -226,7 +267,29 @@ class SignalLabeler(QtWidgets.QMainWindow):
         self.start=True
         self.redraw(0,[])
         print("Reading finished, press Q to save result, press X to skip current read.")
-
+        
+    def _review(self):
+        if self.review:
+            print("A review process already begin.")
+            return
+        print("Begin reading result csv file.")
+        with open(self.save,'r') as csv_f:
+            for line in tqdm(csv_f):
+                split_line = line.strip().split(',')    
+                if 'None' in split_line:
+                    continue
+                self.sig_list.append(split_line[0])
+                self.sig_div_dict[split_line[0]] = [float(split_line[1]),
+                                                    float(split_line[2]),
+                                                    float(split_line[3])]
+        self.sig_iter=self._iter_signals()
+        self.review=True
+        self.ax.clear()
+        self.ax.text(0.5, 0.5,'Press D to view next signal.',
+             horizontalalignment='center',
+             verticalalignment='center',
+             transform = self.ax.transAxes)
+        self.canvas.draw()
     def next_signal(self):
         self.curr_file,self.signal=next(self.sig_iter)
         while self.curr_file in self.cache_fns:

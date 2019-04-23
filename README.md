@@ -1,5 +1,5 @@
-# SEMRNN
-## SEMRNN is a Segmenter using Expectation-Maximization Recurrent Neural Network, it preprocess the Oxford Nanopore direct-RNA sequencing signal by segmentate the adapter, polyA tail and the transcription.
+# NANOPRE
+## NANOPRE is a tool for preprocessing ONT-Nanopore sequencing reads, including preprocessing the ONT direct-RNA sequencing signal by segmentate the adapter, polyA stall and the transcription.
 
 ## Usage
 ```python
