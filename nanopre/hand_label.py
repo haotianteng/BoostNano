@@ -23,7 +23,7 @@ else:
 from PyQt5.QtCore import Qt
 from matplotlib.figure import Figure
 import h5py
-import semrnn
+import nanopre
 import numpy as np
 from shutil import copyfile
 from tqdm import tqdm
@@ -59,7 +59,8 @@ class SignalLabeler(QtWidgets.QMainWindow):
         self.save=save_file
         self.start=False
         self.review=False
-        self.cache_dir=os.path.join(os.path.dirname(semrnn.__file__),'cache')
+        self.review_count=0
+        self.cache_dir=os.path.join(os.path.dirname(nanopre.__file__),'cache')
         self.cache_file=os.path.join(self.cache_dir,'cache.csv')
         self.cache_size=1 #Auto save the result to cache file after this number of labeled.
         self.cache_fns=[]
@@ -108,6 +109,7 @@ class SignalLabeler(QtWidgets.QMainWindow):
         self.save=None
         self.start=False
         self.review=False
+        self.review_count=0
         self.cache_fns=[]
 
     def refresh(self,xpos):
@@ -200,6 +202,12 @@ class SignalLabeler(QtWidgets.QMainWindow):
             self.prev_file = self.curr_file
             self.prev_signal = self.signal
             self.next_signal()
+            self.review_count+=1
+            if self.curr_file is not None:
+                print("Review %d file"%(self.review_count))
+            else:
+                print("Reading %d file fail"%(self.review_count+1))
+                return
             self.pos=self.sig_div_dict[self.curr_file]
             axv_pairs=[]
             for idx,p in enumerate(self.pos):
@@ -216,6 +224,11 @@ class SignalLabeler(QtWidgets.QMainWindow):
             for idx,p in enumerate(self.pos):
                 axv_pairs.append((p,self.colors[idx]))
             self.redraw(None,axv_pairs)
+        elif event.key()==Qt.Key_C:
+            #This will print out the current file name in the terminal
+            if not self.review:
+                return
+            print(self.curr_file)
             
     def _iter_signals(self):
         for file in self.sig_list:
@@ -224,15 +237,21 @@ class SignalLabeler(QtWidgets.QMainWindow):
             elif file.endswith('.fast5'):
                 yield self._read_fast5(file)
     def _read_signal(self,file):
-        with open(file,'r') as f:
-            for line in f:
-                split_line = line.strip().split()
-                return file,[int(x) for x in split_line]
+        try:
+            with open(file,'r') as f:
+                for line in f:
+                    split_line = line.strip().split()
+                    return file,[int(x) for x in split_line]
+        except:
+            return None,None
 
     def _read_fast5(self,file):
-        with h5py.File(file,mode='r') as root:
-            raw_signal = np.asarray(list(root['/Raw/Reads'].values())[0][('Signal')])  
-        return file,raw_signal[::-1]
+        try:
+            with h5py.File(file,mode='r') as root:
+                raw_signal = np.asarray(list(root['/Raw/Reads'].values())[0][('Signal')])  
+            return file,raw_signal[::-1]
+        except OSError as e:
+            return None,None
 
     def _save(self):
         #self.canvas.mpl_disconnect(self.cidmotion)
