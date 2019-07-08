@@ -33,4 +33,4 @@ Once you get enough labelled data, use nanopre_train.py to train.
 
 ### Review
 To review the segmentation result, run hand_label.py and enter in to the review mode, and choose the output folder to review the result.
-![A sample segmentation](sample_data/sample.png)
+![A sample segmentation](./sample_data/sample.png)
