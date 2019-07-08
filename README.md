@@ -25,7 +25,8 @@ S - start
 X - skip the current read  
 Q - quit and save  
 R - enter into review mode, review the label result or running result by Nanopre  
-  - reverse the signal(if already in review mode)  
+    reverse the signal(if already in review mode)  
+
 D - go to next signal in review mode  
 left click - mark a segment  
 
