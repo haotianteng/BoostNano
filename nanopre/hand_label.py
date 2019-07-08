@@ -58,6 +58,7 @@ class SignalLabeler(QtWidgets.QMainWindow):
         self.records=[]
         self.save=save_file
         self.start=False
+        self.reverse = False
         self.review=False
         self.review_count=0
         self.cache_dir=os.path.join(os.path.dirname(nanopre.__file__),'cache')
@@ -126,7 +127,10 @@ class SignalLabeler(QtWidgets.QMainWindow):
     def redraw(self,cursor_x,xpos):
         self.ax.clear()
         self.fig.suptitle(os.path.basename(self.curr_file), fontsize=10)
-        self.line=self.ax.plot(denoise(self.signal))[0]
+        if not self.reverse:
+            self.line=self.ax.plot(denoise(self.signal))[0]
+        else:
+            self.line=self.ax.plot(denoise(self.signal[::-1]))[0]
         if cursor_x is not None:
             self.cursor_line=self.ax.axvline(x=cursor_x,color=self.curr_color)
         self.axvlines=[]
@@ -188,12 +192,20 @@ class SignalLabeler(QtWidgets.QMainWindow):
             self.redraw(None,axv_pairs)
             
         elif event.key()==Qt.Key_R:
-            #Start review mode
-            read_file = str(QFileDialog.getOpenFileName(self, "Select result file to review",'./','CSV Files(*.csv)'))
-            self.save=read_file.split(',')[0][1:].strip("'")
-            if len(self.save) == 0:
-                return
-            self._review()
+            #If already in review mode, then reverse the signal
+            if self.review:
+                self.reverse = not(self.reverse)
+                axv_pairs=[]
+                for idx,p in enumerate(self.pos):
+                    axv_pairs.append((p,self.colors[idx]))
+                self.redraw(None,axv_pairs)
+            #If not, start review mode    
+            else:
+                read_file = str(QFileDialog.getOpenFileName(self, "Select result file to review",'./','CSV Files(*.csv)'))
+                self.save=read_file.split(',')[0][1:].strip("'")
+                if len(self.save) == 0:
+                    return
+                self._review()
             
         elif event.key()==Qt.Key_D:
             #Inspect next signal in review mode
@@ -246,12 +258,12 @@ class SignalLabeler(QtWidgets.QMainWindow):
             return None,None
 
     def _read_fast5(self,file):
-        try:
-            with h5py.File(file,mode='r') as root:
-                raw_signal = np.asarray(list(root['/Raw/Reads'].values())[0][('Signal')])  
-            return file,raw_signal[::-1]
-        except OSError as e:
-            return None,None
+#        try:
+        with h5py.File(file,mode='r') as root:
+            raw_signal = np.asarray(list(root['/Raw/Reads'].values())[0][('Signal')])  
+        return file,raw_signal[::-1]
+#        except OSError as e:
+#            return None,None
 
     def _save(self):
         #self.canvas.mpl_disconnect(self.cidmotion)

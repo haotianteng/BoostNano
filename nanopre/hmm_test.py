@@ -13,8 +13,8 @@ import numpy as np
 from time import time
 
 if __name__ == "__main__":
-    segs = [10000,30000,40000]
-    probs = [[[0.6,0.3,0.1]],[[0.1,0.8,0.1]],[[0.1,0.1,0.8]]]
+    segs = [10000,30000,40000,4000]
+    probs = [[[0.6,0.1,0.2,0.1]],[[0.1,0.7,0.1,0.1]],[[0.1,0.1,0.8,0.0]],[[0.1,0.1,0.0,0.8]]]
     a = []
     for index,seg in enumerate(segs):
         a = a + probs[index]*seg

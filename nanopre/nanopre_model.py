@@ -64,41 +64,38 @@ class CSM(nn.Module):
         self.relu3 = nn.LeakyReLU()
         self.branch1.append(self.relu3)
         self.c2o = nn.Conv1d(32,4,1,stride=1,padding=0)
-    
-    def forward_0(self,feature):
-        """The forward network for the first segment input.
+            
+    def forward(self, feature, hidden):
+        """The formward step for the afterward segment input.
         Args:
-            Feature: A batch of the signal has the shape of [Batch_size,1,Segment_length]
+            Feature: A batch of the signal has the shape of [Batch_size,1,Segment_length]\
+            Hidden: The hidden cell of the previous input, with the shape of 
+            [Batch_zie,32,segment_len], can be empty vector if this is the first call of forwarding method.
         Output:
-            Feature: Output feature (hidden unit) with the shape [Batch_size,32,Segment_length] 
+            Combined: The concatenation of the hidden output and feature with the shape of [Batch_size, 96, Segment_length]
             Out: Classification probability with the shape [Batch_size,4,Segment_length]
         """
         for layer in self.main_branch:
             feature = layer(feature)
-        for layer in self.branch0:
-            feature = layer(feature)
-        out = self.c2o_0(feature)
+        if hidden.size==0:
+            for layer in self.branch0:
+                feature = layer(feature)
+        else:
+            feature = torch.cat((feature,hidden),1)
+            for layer in self.branch1:
+                feature = layer(feature)
+        out = self.c2o(feature)
         return feature,out
-        
-    def forward(self, input, hidden):
-        feature = input
-        for layer in self.main_branch:
-            feature = layer(feature)
-        combined = torch.cat((feature,hidden),1)
-        for layer in self.branch1:
-            combined = layer(combined)
-        out = self.c2o(combined)
-        return combined,out
     
     def celoss(self, predict, target,mask):
         loss = self.CrossEntropyLoss(predict,target)
         return loss * mask
     
     def error(self, predict, target, mask):
-        mask = mask.numpy()
+        mask = mask.cpu().numpy()
         predict = predict.argmax(1)
         compare = (predict == target)
-        compare = compare.numpy()
+        compare = compare.cpu().numpy()
         error = (1 - compare)*mask
         error = np.sum(error,1) / (np.sum(mask,1)+1e-5)
         error = np.mean(error)

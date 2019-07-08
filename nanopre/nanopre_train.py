@@ -15,11 +15,11 @@ import numpy as np
 import os 
 from nanopre.nanopre_model import CSM
 
-
 class trainer(object):
-    def __init__(self,segment_len,train_dataloader,net,keep_record = 5,eval_dataloader = None):
+    def __init__(self,segment_len,train_dataloader,net,keep_record = 5,eval_dataloader = None,device = 'cuda'):
         self.segment_len = segment_len
         self.train_ds = dataloader
+        self.device = device
         if eval_dataloader is None:
             self.eval_ds = self.train_ds
         else:
@@ -51,8 +51,15 @@ class trainer(object):
         with open(ckpt_file,'r') as f:
             latest_ckpt = f.readline().strip().split(':')[1]
             self.global_step = int(latest_ckpt.split('-')[1])
-        self.net.load_state_dict(torch.load(os.path.join(save_folder,latest_ckpt)))
-            
+        if self.device.startswith('cuda'):
+            if self.device == 'cuda':
+                self.device = "cuda:0"
+            self.net.load_state_dict(torch.load(os.path.join(save_folder,latest_ckpt),map_location=self.device))
+        elif self.device == 'cpu':
+            self.net.load_state_dict(torch.load(os.path.join(save_folder,latest_ckpt),
+                                            map_location=torch.device(self.device)))
+        self.net.to(torch.device(self.device))
+        
     def train(self,epoches,optimizer,save_cycle,save_folder):
         self.save_folder = save_folder
         for epoch_i in range(epoches):
@@ -76,7 +83,7 @@ class trainer(object):
     def valid_step(self,batch):
         signal_batch = batch['signal'].transpose(1,2)
         batch_shape = signal_batch.shape
-        hidden,out = net.forward_0(signal_batch[:,:,:self.segment_len])
+        hidden,out = net.forward(signal_batch[:,:,:self.segment_len],np.asarray([]))
         label = batch['class'][:,:self.segment_len]
         mask = batch['signal_mask']
         error = []
@@ -90,7 +97,7 @@ class trainer(object):
     def train_step(self,batch,get_error = False):
         signal_batch = batch['signal'].transpose(1,2)
         batch_shape = signal_batch.shape
-        hidden,out = net.forward_0(signal_batch[:,:,:self.segment_len])
+        hidden,out = net.forward(signal_batch[:,:,:self.segment_len],np.asarray([]))
         label = batch['class'][:,:self.segment_len]
         mask = batch['signal_mask']
         loss = net.celoss(out,label,mask[:,:self.segment_len])
@@ -107,6 +114,41 @@ class trainer(object):
         loss = torch.mean(loss)
         return loss,np.asarray(error)
 
+class DeviceDataLoader():
+    """Wrap a dataloader to move data to a device"""
+    def __init__(self, dataloader, device = None):
+        self.dataloader = dataloader
+        if device is None:
+            device = self.get_default_device()
+        else:
+            device = torch.device(device)
+        self.device = device
+    
+    def __iter__(self):
+        """Yield a batch of data after moving it to device"""
+        for b in self.dataloader:
+            yield self._to_device(b, self.device)
+    
+    def __len__(self):
+        """Number of batches"""
+        return len(self.dataloader)
+    
+    def _to_device(self,data,device):
+        if isinstance(data, (list,tuple)):
+            return [self._to_device(x,device) for x in data]
+        if isinstance(data, (dict)):
+            temp_dict = {}
+            for key in data.keys():
+                temp_dict[key] = self._to_device(data[key],device)
+            return temp_dict
+        return data.to(device, non_blocking=True)
+    
+    def get_default_device(self):
+        if torch.cuda.is_available():
+            return torch.device('cuda')
+        else:
+            return torch.device('cpu')
+
 if __name__ == "__main__":
     train_dir = '/home/heavens/UQ/Chiron_project/Nanopre/training_data/test/'
     eval_dir = '/home/heavens/UQ/Chiron_project/Nanopre/training_data/eval/'
@@ -122,15 +164,14 @@ if __name__ == "__main__":
                                                         ni.Crop(30000),
                                                         ni.TransferProb(5),
                                                         ni.ToTensor()]))
-    
-    dataloader = data.DataLoader(d1,batch_size=5,shuffle=True,num_workers=5)
-    eval_dataloader = data.DataLoader(d2,batch_size=5,shuffle=True,num_workers=5)
+    device = "cuda"
+    dataloader = DeviceDataLoader(data.DataLoader(d1,batch_size=5,shuffle=True,num_workers=5),device = device)
+    eval_dataloader = DeviceDataLoader(data.DataLoader(d2,batch_size=5,shuffle=True,num_workers=5),device = device)
     net = CSM()
-    t = trainer(1000,dataloader, net,eval_dataloader = eval_dataloader)
+    t = trainer(1000,dataloader, net,eval_dataloader = eval_dataloader,device = device)
     lr = 1e-5
     epoches = 10
     global_step = 0
-    device = torch.device("cuda:0")
     optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
     COUNT_CYCLE = 10
     t.load("/home/heavens/UQ/Chiron_project/Nanopre/training_data/test/model/")

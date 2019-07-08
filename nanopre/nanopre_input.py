@@ -275,7 +275,7 @@ if __name__ == "__main__":
                                                         Crop(30000),
                                                         TransferProb(5),
                                                         ToTensor()]))
-    dataloader = data.DataLoader(d1,batch_size=4,shuffle=True,num_workers=4)
+    dataloader = data.DataLoader(d1,batch_size=1,shuffle=True,num_workers=4)
     count = [0,0,0]
     for i_batch, sample_batched in enumerate(dataloader):
 #        print(sample_batched['signal'].size())
@@ -283,9 +283,9 @@ if __name__ == "__main__":
 #        print(sample_batched['landmarks'].size())
 #        print(sample_batched['transfer'].size())
 #        print(sample_batched['class'].size())
-#        if i_batch==2:
-#            show_landmarks_batch(sample_batched)
-#            break
+        if i_batch==2:
+            show_landmarks_batch(sample_batched)
+            break
         for i in range(3):
             temp_count = sample_batched['class'] == i
             temp_count = temp_count.numpy().astype(np.int32)
