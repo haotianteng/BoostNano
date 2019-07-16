@@ -33,7 +33,7 @@ class evaluator(object):
             latest_ckpt = f.readline().strip().split(':')[1]
             self.global_step = int(latest_ckpt.split('-')[1])
         self.net.load_state_dict(torch.load(os.path.join(self.save_folder,latest_ckpt),
-                                            map_location=torch.device(self.device)))
+                                            map_location=self.device))
         self.net.to(self.device)
         
     def init_session(self,sample):
@@ -96,7 +96,7 @@ def trace(net, example_input):
     
 def main():
     net = CSM()
-    ev = evaluator(net,FLAGS.model_path)
+    ev = evaluator(net,FLAGS.model_path,device = FLAGS.device)
     iterator = fast5_iter(FLAGS.input_fast5)
     if not os.path.isdir(FLAGS.output_folder):
         os.mkdir(FLAGS.output_folder)
@@ -110,7 +110,7 @@ def test(fast5_f):
     root = h5py.File(fast5_f)
     signal = np.asarray(list(root['/Raw/Reads'].values())[0][('Signal')],dtype = np.float32)
     net = CSM()
-    ev = evaluator(net,FLAGS.model_path)
+    ev = evaluator(net,FLAGS.model_path,device = FLAGS.device)
     (decoded,path,locs) = ev.eval_sig(signal,FLAGS.segment_length)
     print(locs)
     plt.plot(signal)
@@ -146,8 +146,14 @@ if __name__ == "__main__":
                         default = 1,
                         type = int,
                         help="Number of threads that are used to run.")
+    parser.add_argument('-d',
+                        '--device', 
+                        default = None,
+                        help="Calculation device, need to be one of the following: cpu, cuda:0, cuda:1, ...")
     ##TODO Multiple threading need to be added.
     FLAGS = parser.parse_args(sys.argv[1:])
+    if (FLAGS.device != "cpu") and (FLAGS.device is not None) and (not FLAGS.device.startswith("cuda:")):
+        raise ValueError("Invalid device %s"%(FLAGS.device))
     main()
     
      
