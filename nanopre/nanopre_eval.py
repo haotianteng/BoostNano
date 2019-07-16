@@ -71,8 +71,10 @@ class evaluator(object):
             if len(segment)<segment_len:
                 segment = np.pad(segment, (0,segment_len - len(segment)), 'constant', constant_values = (0,0) )
             segment = torch.from_numpy(np.reshape(segment,(1,1,segment_len)))
-            hidden,temp_out = self.net.forward(segment.to(self.device, non_blocking=True),hidden)
+            with torch.no_grad():
+                hidden,temp_out = self.net.forward(segment.to(self.device, non_blocking=True),hidden)
             out = np.concatenate((out,temp_out.detach().cpu().numpy()),axis = 2)
+            torch.cuda.empty_cache()
         out = softmax(out, axis=1)
         return self.decoding(out[0,:,:])
             
