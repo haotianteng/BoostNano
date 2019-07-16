@@ -221,9 +221,11 @@ class SignalLabeler(QtWidgets.QMainWindow):
                 print("Reading %d file fail"%(self.review_count+1))
                 return
             self.pos=self.sig_div_dict[self.curr_file]
+            print("Segmentation:"+ ",".join([str(x) for x in self.pos]))
             axv_pairs=[]
             for idx,p in enumerate(self.pos):
                 axv_pairs.append((p,self.colors[idx]))
+            print(axv_pairs)
             self.redraw(None,axv_pairs)
         elif event.key()==Qt.Key_A:
             #Inspect previous signal in review mode(can only go back once)

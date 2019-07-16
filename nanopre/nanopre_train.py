@@ -16,10 +16,19 @@ import os
 from nanopre.nanopre_model import CSM
 
 class trainer(object):
-    def __init__(self,segment_len,train_dataloader,net,keep_record = 5,eval_dataloader = None,device = 'cuda'):
+    def __init__(self,segment_len,train_dataloader,net,keep_record = 5,eval_dataloader = None,device = None):
+        """Trainer
+        Args:
+            segment_len: Type Int, legnth fo the segment.
+            train_dataloader: A torch.utils.data.dataloader.DataLoader instance.
+            net: A CSM instance.
+            keep_record: Type Int, defualt is 5, the latest n checkpoints to save for each training routine.
+            eval_dataloader: A torch.utils.data.dataloader.DataLoader instance, if None, use training dataloader.
+            device: The device to put the model on, can be cpu or cuda, if None then gpu will be used if available.
+        """
         self.segment_len = segment_len
         self.train_ds = dataloader
-        self.device = device
+        self.device = self._get_device(device)
         if eval_dataloader is None:
             self.eval_ds = self.train_ds
         else:
@@ -29,6 +38,15 @@ class trainer(object):
         self.keep_record = keep_record
         self.save_list = []
     
+    def _get_device(self,device):
+        if device is None:
+            if torch.cuda.is_available():
+                return torch.device('cuda')
+            else:
+                return torch.device('cpu')
+        else:
+            return torch.device(device)
+        
     def save(self):
         ckpt_file = os.path.join(self.save_folder,'checkpoint')
         current_ckpt = 'ckpt-'+str(self.global_step)
@@ -51,14 +69,8 @@ class trainer(object):
         with open(ckpt_file,'r') as f:
             latest_ckpt = f.readline().strip().split(':')[1]
             self.global_step = int(latest_ckpt.split('-')[1])
-        if self.device.startswith('cuda'):
-            if self.device == 'cuda':
-                self.device = "cuda:0"
-            self.net.load_state_dict(torch.load(os.path.join(save_folder,latest_ckpt),map_location=self.device))
-        elif self.device == 'cpu':
-            self.net.load_state_dict(torch.load(os.path.join(save_folder,latest_ckpt),
-                                            map_location=torch.device(self.device)))
-        self.net.to(torch.device(self.device))
+        self.net.load_state_dict(torch.load(os.path.join(save_folder,latest_ckpt),map_location=self.device))
+        self.net.to(self.device)
         
     def train(self,epoches,optimizer,save_cycle,save_folder):
         self.save_folder = save_folder

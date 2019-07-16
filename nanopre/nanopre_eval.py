@@ -18,29 +18,42 @@ from scipy.special import softmax
 from matplotlib import pyplot as plt
 
 class evaluator(object):
-    def __init__(self,net,saved_folder):
+    def __init__(self,net,saved_folder,device=None):
         """Initialize a evaluator with a saved pytorch model
         Args:
             net: A pytorch model.
             saved_folder: the folder that contained a trained pytorch model.
+            device: The running device, can be assign one of the following: cpu, cuda. If None, a device will be detected.
         """
         self.net = net
         self.save_folder = saved_folder
+        self.device = self._get_device(device)
         ckpt_file = os.path.join(self.save_folder,'checkpoint')
         with open(ckpt_file,'r') as f:
             latest_ckpt = f.readline().strip().split(':')[1]
             self.global_step = int(latest_ckpt.split('-')[1])
-        self.net.load_state_dict(torch.load(os.path.join(self.save_folder,latest_ckpt)))
+        self.net.load_state_dict(torch.load(os.path.join(self.save_folder,latest_ckpt),
+                                            map_location=torch.device(self.device)))
+        self.net.to(self.device)
         
     def init_session(self,sample):
+        #TODO: transfer the model into a traced model.
         """Transfer the saved model into a traced model:
         Args:
-ipdb> print
             sample: A sample input with shape of [Batch_size,1,segment_len]
         """
         self.net = torch.jit.trace(self.net,sample)
-        
-        
+    
+    def _get_device(self,device):
+        if device is None:
+            if torch.cuda.is_available():
+                return torch.device('cuda')
+            else:
+                return torch.device('cpu')
+        else:
+            return torch.device(device)
+
+    
     def eval_sig(self,signal,segment_len):
         """Evalulate a single signal.
         Args:
@@ -58,8 +71,8 @@ ipdb> print
             if len(segment)<segment_len:
                 segment = np.pad(segment, (0,segment_len - len(segment)), 'constant', constant_values = (0,0) )
             segment = torch.from_numpy(np.reshape(segment,(1,1,segment_len)))
-            hidden,temp_out = self.net.forward(segment,hidden)
-            out = np.concatenate((out,temp_out.detach().numpy()),axis = 2)
+            hidden,temp_out = self.net.forward(segment.to(self.device, non_blocking=True),hidden)
+            out = np.concatenate((out,temp_out.detach().cpu().numpy()),axis = 2)
         out = softmax(out, axis=1)
         return self.decoding(out[0,:,:])
             
