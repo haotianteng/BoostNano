@@ -312,9 +312,11 @@ class SignalLabeler(QtWidgets.QMainWindow):
                 if 'None' in split_line:
                     continue
                 self.sig_list.append(split_line[0])
-                self.sig_div_dict[split_line[0]] = [float(split_line[1]),
-                                                    float(split_line[2]),
-                                                    float(split_line[3])]
+                temp_pos = [float(x) for x in split_line[1:]]
+                if len(temp_pos) == 0:
+                    print("%s has no segmentation information"%(split_line[0]))
+                    continue
+                self.sig_div_dict[split_line[0]] = temp_pos
         self.sig_iter=self._iter_signals()
         self.review=True
         self.ax.clear()
