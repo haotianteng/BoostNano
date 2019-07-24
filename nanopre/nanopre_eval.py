@@ -89,8 +89,10 @@ def fast5_iter(fast5_dir):
                 continue
             abs_path = os.path.join(dirpath,filename)
             root = h5py.File(abs_path)
-            signal = np.asarray(list(root['/Raw/Reads'].values())[0][('Signal')],dtype = np.float32)
-            yield signal,abs_path
+            read_h = list(root['/Raw/Reads'].values())[0]
+            signal = np.asarray(read_h[('Signal')],dtype = np.float32)
+            read_id = read_h.attrs['read_id']
+            yield signal,abs_path,read_id.decode("utf-8")
     
 def trace(net, example_input):
     traced_model = torch.jit.trace(net,example_input)
@@ -104,9 +106,9 @@ def main():
         os.mkdir(FLAGS.output_folder)
     output_f = os.path.join(FLAGS.output_folder, 'out.csv')
     with open(output_f,'w+') as out_f:
-        for signal,fast5_f in tqdm(iterator):
+        for signal,fast5_f,read_id in tqdm(iterator):
             (decoded,path,locs) = ev.eval_sig(signal,FLAGS.segment_length)
-            out_f.write(','.join([fast5_f]+[str(x) for x in locs])+'\n')
+            out_f.write(','.join([fast5_f]+[read_id]+[str(x) for x in locs])+'\n')
     
 def test(fast5_f):
     root = h5py.File(fast5_f)
@@ -120,8 +122,8 @@ def test(fast5_f):
         plt.axvline(x=loc,color = 'red')
     
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='chiron',
-                                     description='A deep neural network basecaller.')
+    parser = argparse.ArgumentParser(prog='nanopre',
+                                     description='A preprocesser for Nanopore RNA basecall.')
     parser.add_argument('-i', 
                         '--input_fast5', 
                         required = True,
