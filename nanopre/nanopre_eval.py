@@ -16,7 +16,7 @@ import argparse
 from tqdm import tqdm
 from scipy.special import softmax
 from matplotlib import pyplot as plt
-
+MINIMUM_LEN=1000
 class evaluator(object):
     def __init__(self,net,saved_folder,device=None):
         """Initialize a evaluator with a saved pytorch model
@@ -82,17 +82,20 @@ class evaluator(object):
         result_tuple = hmm.decode(logits)
         return result_tuple
     
-def fast5_iter(fast5_dir):
+def fast5_iter(fast5_dir,mode = 'r'):
     for (dirpath, dirnames, filenames) in os.walk(fast5_dir+'/'):
         for filename in filenames:
             if not filename.endswith('fast5'):
                 continue
             abs_path = os.path.join(dirpath,filename)
-            root = h5py.File(abs_path)
+            root = h5py.File(abs_path,mode = mode)
             read_h = list(root['/Raw/Reads'].values())[0]
-            signal = np.asarray(read_h[('Signal')],dtype = np.float32)
+            if 'Signal_Old' in read_h:
+                signal = np.asarray(read_h[('Signal_Old')],dtype = np.float32)
+            else:
+                signal = np.asarray(read_h[('Signal')],dtype = np.float32)
             read_id = read_h.attrs['read_id']
-            yield signal,abs_path,read_id.decode("utf-8")
+            yield read_h,signal,abs_path,read_id.decode("utf-8")
     
 def trace(net, example_input):
     traced_model = torch.jit.trace(net,example_input)
@@ -101,22 +104,52 @@ def trace(net, example_input):
 def main():
     net = CSM()
     ev = evaluator(net,FLAGS.model_path,device = FLAGS.device)
-    iterator = fast5_iter(FLAGS.input_fast5)
+    if FLAGS.replace:
+        mode = 'a'
+    else:
+        mode = 'r'
+    iterator = fast5_iter(FLAGS.input_fast5,mode=mode)
     if not os.path.isdir(FLAGS.output_folder):
         os.mkdir(FLAGS.output_folder)
     output_f = os.path.join(FLAGS.output_folder, 'out.csv')
     with open(output_f,'w+') as out_f:
-        for signal,fast5_f,read_id in tqdm(iterator):
+        for read_h,signal,fast5_f,read_id in tqdm(iterator):
             (decoded,path,locs) = ev.eval_sig(signal,FLAGS.segment_length)
+            if 'Signal' in read_h:
+                del read_h['Signal']    
+            if 'Signal_Old' in read_h:
+                del read_h['Signal_Old']
+            old_h = read_h.create_dataset('Signal_Old', shape = (len(signal),),maxshape=(None,),dtype = np.dtype(np.int16))
+            transcription = signal[int(locs[0]):] 
+            ### Set a minimum length for Guppy to work###
+            if len(transcription) < MINIMUM_LEN:
+                transcription = np.concatenate((transcription, [np.mean(transcription)]*(MINIMUM_LEN - len(transcription))))         
+            ###
+            new_h = read_h.create_dataset('Signal', shape = (len(transcription),),maxshape=(None,),dtype = np.dtype(np.int16))
+            read_attrs = read_h.attrs
+            read_attrs.modify('duration',len(transcription))
+            old_h[:] = np.asarray(signal,dtype = np.int16)
+#            new_h[:] = np.asarray(np.concatenate((transcription,[0]*(len(signal) - len(transcription)))),dtype = np.int16)
+            new_h[:] = np.asarray(transcription, dtype = np.int16)
             out_f.write(','.join([fast5_f]+[read_id]+[str(x) for x in locs])+'\n')
-    
-def test(fast5_f):
-    root = h5py.File(fast5_f)
-    signal = np.asarray(list(root['/Raw/Reads'].values())[0][('Signal')],dtype = np.float32)
+            if FLAGS.replace:
+                if len(locs)<3:
+                    continue
+def test(fast5_folder):
     net = CSM()
     ev = evaluator(net,FLAGS.model_path,device = FLAGS.device)
-    (decoded,path,locs) = ev.eval_sig(signal,FLAGS.segment_length)
-    print(locs)
+    iterator = fast5_iter(fast5_folder,mode = 'r')
+    lens = []
+    max_test = 1000
+    count = 0 
+    for read_h,signal,fast5_f,read_id in tqdm(iterator):
+        (decoded,path,locs) = ev.eval_sig(signal,1000)
+        transcription = signal[int(locs[0]):]
+        lens.append(len(transcription))
+        count+=1
+        if count>= max_test:
+            break
+    plt.hist(lens)
     plt.plot(signal)
     for loc in locs:
         plt.axvline(x=loc,color = 'red')
@@ -154,11 +187,39 @@ if __name__ == "__main__":
                         '--device', 
                         default = None,
                         help="Calculation device, need to be one of the following: cpu, cuda:0, cuda:1, ...")
+    parser.add_argument('--replace',
+                        action = 'store_true',
+                        help = "If true, then replace the signal in the fast5 files in place.")
     ##TODO Multiple threading need to be added.
     FLAGS = parser.parse_args(sys.argv[1:])
     if (FLAGS.device != "cpu") and (FLAGS.device is not None) and (not FLAGS.device.startswith("cuda:")):
         raise ValueError("Invalid device %s"%(FLAGS.device))
     main()
+    
+    ###Test script### Comment out the main function and uncomment this test function for testing and plot
+#    class FLAGS:
+#        pass
+#    FLAGS.model_path = '/home/heavens/UQ/Chiron_project/Nanopre/model/'
+#    FLAGS.device = 'cpu'
+#    fast5_folder = '/home/heavens/UQ/Chiron_project/test_data/test_fast5'
+#    net = CSM()
+#    ev = evaluator(net,FLAGS.model_path,device = FLAGS.device)
+#    iterator = fast5_iter(fast5_folder,mode = 'w')
+#    lens = []
+#    max_test = 1000
+#    count = 0 
+#    for read_h,signal,fast5_f,read_id in tqdm(iterator):
+#        (decoded,path,locs) = ev.eval_sig(signal,1000)
+#        transcription = signal[int(locs[0]):]
+#        lens.append(len(transcription))
+#        count+=1
+#        if count>= max_test:
+#            break
+#    plt.hist(lens)
+#    plt.plot(signal)
+#    for loc in locs:
+#        plt.axvline(x=loc,color = 'red')
+    #################
     
      
     
