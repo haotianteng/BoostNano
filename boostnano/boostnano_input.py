@@ -266,9 +266,9 @@ class ToTensor(object):
                 'class':torch.from_numpy(sample['class'],)}
 
 if __name__ == "__main__":
-    root_dir = '/home/heavens/UQ/Chiron_project/Nanopre/training_data/test/'
-    test_file = "/home/heavens/UQ/Chiron_project/Nanopre/training_data/training.csv"
-#    data = read_csv("/home/heavens/UQ/Chiron_project/Nanopre/training_data/result_soeyoung.csv",'/home/heavens/UQ/Chiron_project/Nanopre/training_data/eval')
+    root_dir = '/home/heavens/UQ/Chiron_project/boostnano/training_data/test/'
+    test_file = "/home/heavens/UQ/Chiron_project/boostnano/training_data/training.csv"
+#    data = read_csv("/home/heavens/UQ/Chiron_project/boostnano/training_data/result_soeyoung.csv",'/home/heavens/UQ/Chiron_project/boostnano/training_data/eval')
 #    data = read_csv(test_file,root_dir)
     d1 = dataset(root_dir,transform=transforms.Compose([DeNoise((200,1200)),
                                                         WhiteNoise(200,0.1),

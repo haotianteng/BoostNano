@@ -6,14 +6,14 @@ Created on Sun May 12 00:47:58 2019
 @author: heavens
 """
 
-import nanopre.nanopre_input as ni
+import boostnano.boostnano_input as ni
 from torchvision import transforms
 from torch.utils import data
 import torch
 import torch.nn as nn
 import numpy as np
 import os 
-from nanopre.nanopre_model import CSM
+from boostnano.boostnano_model import CSM
 
 class trainer(object):
     def __init__(self,segment_len,train_dataloader,net,keep_record = 5,eval_dataloader = None,device = None):
@@ -162,9 +162,9 @@ class DeviceDataLoader():
             return torch.device('cpu')
 
 if __name__ == "__main__":
-    train_dir = '/home/heavens/UQ/Chiron_project/Nanopre/training_data/test/'
-    eval_dir = '/home/heavens/UQ/Chiron_project/Nanopre/training_data/eval/'
-    test_file = "/home/heavens/UQ/Chiron_project/Nanopre/training_data/training.csv"
+    train_dir = '/home/heavens/UQ/Chiron_project/boostnano/training_data/test/'
+    eval_dir = '/home/heavens/UQ/Chiron_project/boostnano/training_data/eval/'
+    test_file = "/home/heavens/UQ/Chiron_project/boostnano/training_data/training.csv"
 #    data = read_csv(test_file,root_dir)
     d1 = ni.dataset(train_dir,transform=transforms.Compose([ni.DeNoise((0,900)),
                                                         ni.WhiteNoise(200,0.2),
@@ -186,8 +186,8 @@ if __name__ == "__main__":
     global_step = 0
     optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
     COUNT_CYCLE = 10
-    t.load("/home/heavens/UQ/Chiron_project/Nanopre/training_data/test/model/")
-    t.train(epoches,optimizer,COUNT_CYCLE,"/home/heavens/UQ/Chiron_project/Nanopre/training_data/test/model/")
+    t.load("/home/heavens/UQ/Chiron_project/boostnano/training_data/test/model/")
+    t.train(epoches,optimizer,COUNT_CYCLE,"/home/heavens/UQ/Chiron_project/boostnano/training_data/test/model/")
 
     
     

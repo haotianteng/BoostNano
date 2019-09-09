@@ -5,8 +5,8 @@ Created on Tue Jun 18 13:17:41 2019
 
 @author: heavens
 """
-from nanopre.nanopre_model import CSM
-from nanopre import hmm
+from boostnano.boostnano_model import CSM
+from boostnano import hmm
 import torch
 import os
 import sys
@@ -155,7 +155,7 @@ def test(fast5_folder):
         plt.axvline(x=loc,color = 'red')
     
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='nanopre',
+    parser = argparse.ArgumentParser(prog='boostnano',
                                      description='A preprocesser for Nanopore RNA basecall.')
     parser.add_argument('-i', 
                         '--input_fast5', 
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     ###Test script### Comment out the main function and uncomment this test function for testing and plot
 #    class FLAGS:
 #        pass
-#    FLAGS.model_path = '/home/heavens/UQ/Chiron_project/Nanopre/model/'
+#    FLAGS.model_path = '/home/heavens/UQ/Chiron_project/boostnano/model/'
 #    FLAGS.device = 'cpu'
 #    fast5_folder = '/home/heavens/UQ/Chiron_project/test_data/test_fast5'
 #    net = CSM()
