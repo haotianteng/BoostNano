@@ -8,7 +8,7 @@ Created on Thu Jun 27 06:56:41 2019
 
 from __future__ import absolute_import
 from __future__ import print_function
-from nanopre import hmm
+from boostnano import hmm
 import numpy as np
 from time import time
 

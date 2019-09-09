@@ -23,7 +23,7 @@ else:
 from PyQt5.QtCore import Qt
 from matplotlib.figure import Figure
 import h5py
-import nanopre
+import boostnano
 import numpy as np
 from shutil import copyfile
 from tqdm import tqdm
@@ -61,7 +61,7 @@ class SignalLabeler(QtWidgets.QMainWindow):
         self.reverse = False
         self.review=False
         self.review_count=0
-        self.cache_dir=os.path.join(os.path.dirname(nanopre.__file__),'cache')
+        self.cache_dir=os.path.join(os.path.dirname(boostnano.__file__),'cache')
         self.cache_file=os.path.join(self.cache_dir,'cache.csv')
         self.cache_size=1 #Auto save the result to cache file after this number of labeled.
         self.cache_fns=[]

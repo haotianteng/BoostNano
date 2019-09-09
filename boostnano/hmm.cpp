@@ -94,7 +94,7 @@ static PyArrayObject* vector1D_to_nparray(const vector<T>& vec, int type_num = P
    }
 }
 
-static PyObject* nanopre_decode(PyObject *self, PyObject *args)
+static PyObject* boostnano_decode(PyObject *self, PyObject *args)
 {
     PyArrayObject *array;
     PyObject * return_tuple;
@@ -175,13 +175,13 @@ static char vaterbi_decoding_docs[] = "Decode: Applying a Vaterbi decoding of th
 
 static PyMethodDef DecodeMethod[] = {
     {"decode", 
-    nanopre_decode,
+    boostnano_decode,
     METH_VARARGS,
     vaterbi_decoding_docs},
     {NULL, NULL, 0, NULL}
 };
 
-static struct PyModuleDef nanopremodule = {
+static struct PyModuleDef boostnanomodule = {
 	PyModuleDef_HEAD_INIT,
 	"hmm", //the module name
 	vaterbi_decoding_docs,
@@ -192,5 +192,5 @@ static struct PyModuleDef nanopremodule = {
 PyMODINIT_FUNC
 PyInit_hmm(void){
     import_array();
-    return PyModule_Create(&nanopremodule);
+    return PyModule_Create(&boostnanomodule);
 };
