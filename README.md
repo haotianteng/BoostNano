@@ -1,5 +1,5 @@
-# NANOPRE
-## NANOPRE is a tool for preprocessing ONT-Nanopore RNA sequencing reads(before basecalling), it segmentates the adapter, polyA stall and the transcription from the raw signal.
+# BOOSTNANO
+## BOOSTNANO is a tool for preprocessing ONT-Nanopore RNA sequencing reads(before basecalling), it segmentates the adapter, polyA stall and the transcription from the raw signal.
 
 ## Installation
 git clone https://github.com/haotianteng/Nanopre-release.git  
