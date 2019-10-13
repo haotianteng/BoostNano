@@ -14,6 +14,11 @@ Check out the sample code in the Jupyter Notebook Sample.ipynb for how to use th
 ```python
 python boostnano_eval.py -i INPUT_FAST5_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER
 ```
+*Replace the raw signal in the fast5 files for basecalling:*
+```python
+python boostnano_eval.py -i INPUT_FAST5_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER --replace
+```
+*Notice*: This will save the segmented siganl in to the original Signal Slot in the fast5 files, and copy the old signal into the Signal_Old slot, so a basecaller can directly run on the processed fast5 files.
 
 ### Label&Training
 ```python
