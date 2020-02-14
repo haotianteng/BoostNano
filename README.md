@@ -4,7 +4,7 @@
 ## Installation
 git clone https://github.com/haotianteng/BoostNano.git  
 Install [Pytorch](https://pytorch.org/)  
-Add Nanopre path into Python path: export PYTHONPATH=PATH_TO_NANOPRE  
+Add BoostNano path into Python path: export PYTHONPATH=PATH_TO_BOOSTNANO  
 
 ## Code Example
 Check out the sample code in the Jupyter Notebook Sample.ipynb for how to use the package.  
