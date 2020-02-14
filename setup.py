@@ -1,7 +1,7 @@
 from distutils.core import setup, Extension
 import numpy as np
 
-ext_modules = [ Extension('nanopre.hmm', sources = ['boostnano/hmm.cpp'],extra_compile_args=['-std=c++11'])]
+ext_modules = [ Extension('boostnano.hmm', sources = ['boostnano/hmm.cpp'],extra_compile_args=['-std=c++11'])]
 
 setup(
 	name = 'boostnano',

@@ -1,0 +1,9 @@
+torch>=1.1
+torchvision
+tqdm
+scipy
+matplotlib
+uuid
+numpy
+PyQt5
+h5py
