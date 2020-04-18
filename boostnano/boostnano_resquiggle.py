@@ -10,6 +10,8 @@ import shlex
 import sys
 from multiprocessing import Pool
 import tqdm
+from boostnano.utils.sam_op import Aligner
+
 DATA_FORMAT = np.dtype([('raw','<i2'),
                         ('norm_raw','<f8'),
                         ('norm_trans','<f8'),
@@ -41,42 +43,18 @@ def fast5s_iter(dest_link,tsv_table):
         if tag in accept_tags:
             yield dest_link[tsv_table['readname'][idx]],tsv_table['transcript_start'][idx]
 
-def extract_fastq(input_f,ref_f,mode = 0,trans_start = None,alignment = True):
+def extract_fastq(input_f):
     """
     Args:
         input_f: intput fast5 file handle
-        ref_f: file name of the reference
-        mode: 0-dna, 1-rna, -1-rna 180mV
-        trans_start: Start position of the transcription(required in RNA mode).
-        alignment: If requrie alignment.
     """
     with h5py.File(input_f,'r') as input_fh:
         raw_entry = list(input_fh['/Raw/Reads'].values())[0]
+        read_id = raw_entry.attrs['read_id'].decode('utf-8')
         raw_signal = raw_entry['Signal'].value
         raw_seq = input_fh[BASECALL_ENTRY+'/BaseCalled_template/Fastq'].value
         event = input_fh[BASECALL_ENTRY+'/BaseCalled_template/Events'].value
-        align = None
-        ref_seq = None
-        if alignment:
-            ref = mappy.Aligner(ref_f,preset = "map-ont",best_n = 5)
-            aligns = ref.map(raw_seq.split(b'\n')[1])
-            maxmapq = -np.inf
-            for aln in aligns:
-                if aln.mapq > maxmapq:
-                    maxmapq = aln.mapq
-                    align = aln
-            if align is None:
-                print("FAIL MAPPING "+input_f)
-            else:
-                if align.strand == -1:
-                    ref_seq = mappy.revcomp(ref.seq(align.ctg,start = align.r_st,end = align.r_en))
-                else:
-                    ref_seq = ref.seq(align.ctg,start = align.r_st,end = align.r_en)
-        if (mode == 1) or (mode == -1):
-            raw_signal = raw_signal[::-1]
-    if ref_seq is None and alignment:
-        print("No Reference sequence found in %s"%(input_f))
-    return raw_signal,raw_seq,ref_seq,event
+    return raw_signal,raw_seq,read_id,event
 
 def write_output(prefix,raw_signal,ref_seq):
     signal_fn = prefix+'.signal'
@@ -167,15 +145,35 @@ def copy_raw(src_fast5,dest_fast5,raw):
         h5py.h5o.copy(root.id,b'UniqueGlobalKey',w_root.id,b'UniqueGlobalKey')
     return None
 
+def load_align(samfile,reference):
+#    ### Debug code begin ###
+#    from utils.sam_op import load_aligner
+#    aln = load_aligner("/home/heavens/UQ/Chiron_project/RNA_Analysis/RNA_Nanopore/assess/aln.bin")
+#    ### Debug code end ###
+    aln = Aligner(reference)
+    aln.parse_sam(samfile)
+    return aln
+
 def label(abs_fast5):
-    trans_start = abs_fast5[1]
-    abs_fast5 = abs_fast5[0]
+    print(abs_fast5)
+    aln = load_align(args.samfile,args.reference)
     if abs_fast5.endswith("fast5"):
         filename = os.path.basename(abs_fast5)
         align = True
         if args.resquiggle_method == 'raw':
             align = False
-        raw_signal,raw_seq,ref_seq,decap_event = extract_fastq(abs_fast5,args.ref,args.mode,trans_start,align)
+        raw_signal,raw_seq,read_id,decap_event = extract_fastq(abs_fast5)
+        ref_seqs = aln.aln_dict[read_id]
+        #Get ref sequence with max quality score.
+        ref_seq = max(ref_seqs,key = lambda x: x['map_score'])
+        accum_step = np.pad(np.cumsum(decap_event['move']),(1,0),'constant',constant_values = (0,0))
+        accum_loc = np.pad(np.cumsum(decap_event['length']),(1,0),'constant',constant_values = (0,0))
+        signal_start = accum_loc[accum_step>=ref_seq['query_offset'][0]][0]
+        signal_end = accum_loc[accum_step<=ref_seq['query_offset'][1]][-1]
+        decap_signal = raw_signal[signal_start:signal_end]
+        if args.mode == 1 or args.mode == -1:
+            decap_signal = decap_signal[::-1]
+        ref_seq = ref_seq['reference_sequence']
         prefix = os.path.join(args.saving,'resquiggle',os.path.splitext(filename)[0])
         fast5_save = os.path.join(args.saving,'fast5s',filename)
         if args.copy_original:
@@ -186,10 +184,10 @@ def label(abs_fast5):
         ######Begin cwDTW pipeline
         if args.resquiggle_method == 'cwdtw':
             if ref_seq is not None:
-                input_cmd = write_output(prefix,raw_signal,ref_seq)
+                input_cmd = write_output(prefix,decap_signal,ref_seq)
                 cmd = os.path.dirname(os.path.realpath(__file__))+"/utils/cwDTW_nano " + input_cmd +' -R ' + str(args.mode)
-                print(cmd)
-                raise ValueError
+#                print(cmd)
+#                raise ValueError
                 args_cmd = shlex.split(cmd)
                 p = subprocess.Popen(args_cmd,stdout = subprocess.PIPE,stderr = subprocess.STDOUT)
                 p_out,_ = p.communicate()
@@ -209,7 +207,7 @@ def run():
     for path , _ , files in os.walk(args.input):
         for file in files:
             if file.endswith('fast5'):
-                filelist.append((os.path.join(path,file),None))
+                filelist.append(os.path.join(path,file))
     for file in filelist:
         label(file)
 #    for _ in tqdm.tqdm(pool.imap_unordered(label,filelist),total = len(filelist)):
@@ -222,8 +220,10 @@ if __name__ == "__main__":
                                      description='A preprocesser for Nanopore RNA basecall and RNA model training.')
     parser.add_argument('-i', '--input', required = True,
                         help="Directory of the fast5 files.")
-    parser.add_argument('-r', '--ref', required = True,
+    parser.add_argument('-r', '--reference', required = True,
                         help="Reference file name")
+    parser.add_argument('-a', '--samfile', required = True,
+                        help="Alignment sam file that contain all the sequences.")    
     parser.add_argument('-m','--mode',default = 0,type = int,
                         help="If RNA pore model is used, 0 for DNA pore model, 1 for 200mV RNA pore model, -1 for 180mV RNA pore model, DEFAULT is 0.")
     parser.add_argument('-s','--saving',

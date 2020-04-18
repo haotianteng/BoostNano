@@ -156,7 +156,7 @@ def test(fast5_folder):
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='boostnano',
-                                     description='A preprocesser for Nanopore RNA basecall.')
+                                     description='A preprocesser for Nanopore RNA basecall and RNA model training.')
     parser.add_argument('-i', 
                         '--input_fast5', 
                         required = True,
