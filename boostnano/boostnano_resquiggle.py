@@ -208,7 +208,7 @@ def label(abs_fast5,aligner,run_record,sema):
 def run():
     print("Create a aligner based on reference genomeand SAM file.")
     aligner_f = os.path.join(args.saving,"aln.bin")
-#    create_aligner(args.samfile,args.reference,aligner_f)
+    create_aligner(args.samfile,args.reference,aligner_f)
     aligner = load_aligner(aligner_f)
     print("Aligner craeated successfully and is stored in %s"%(aligner_f))
     
