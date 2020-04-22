@@ -191,9 +191,8 @@ def label(abs_fast5,aligner,run_record,sema):
                 input_cmd = write_output(prefix,decap_signal,ref_seq)
                 cmd = os.path.dirname(os.path.realpath(__file__))+"/utils/cwDTW_nano " + input_cmd +' -R ' + str(args.mode)
                 args_cmd = shlex.split(cmd)
-                p = subprocess.Popen(args_cmd,stdout = subprocess.PIPE,stderr = subprocess.STDOUT)
-                p_out,_ = p.communicate()
-                p.wait()
+                with subprocess.Popen(args_cmd,stdout = subprocess.PIPE,stderr = subprocess.STDOUT) as p:
+                    p_out,_ = p.communicate()
                 align_matrix = parse_cwDTW(prefix+'.aln')
             else:
                 pass
