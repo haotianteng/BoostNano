@@ -57,25 +57,58 @@ class Aligner(object):
         cigar_string = line[5]
         map_score = int(line[4])
         cigar_split = re.split("([A-Z])",cigar_string)[:-1]
-        cigar_iter = iter(cigar_split)
-        query = line[9]
+        # If secondary alignment fetch query sequence from previous result.
+        if bool(flag&0X100):
+            query = self.aln_dict[read_id][-1]['query_sequence']
+        else:
+            query = line[9]
+        # Add the hard clip segment back to query sequence
+        if cigar_split[1] == 'H':
+            query = "H"*int(cigar_split[0])+query
+        if cigar_split[-1] == 'H':
+            query = query+"H"*int(cigar_split[-2])
+        # Present the original sequence instead of reverse complement sequence.
         if rc:
             query = reverse_complement(query)
         query_offset =[0,len(query)]
-        if cigar_split[1] == 'S':
+        if cigar_split[1] == 'S' or cigar_split[1]=='H':
             if rc:
                 query_offset[1] = len(query) - int(cigar_split[0])
             else:
                 query_offset[0] = int(cigar_split[0])
-        if cigar_split[-1] == 'S':
+        if cigar_split[-1] == 'S' or cigar_split[-1] == 'H':
             if rc:
                 query_offset[0] = int(cigar_split[-2])
             else:
                 query_offset[1] = len(query) - int(cigar_split[-2])
         def increment_char(c):
             return c=='M' or c=='D' or c=='N'
-        ref_len = sum([int(x) for x in cigar_iter if increment_char(next(cigar_iter)) ])
-        ref_seq = self.ref[ref_contig][ref_start:ref_start+ref_len]
+        cigar_iter = iter(cigar_split)
+        # Using the number of match/mismatch bases as maping score
+        map_score = sum([int(x) for x in cigar_iter if next(cigar_iter)=='M'])
+        if 'N' in cigar_split:
+            cigar_iter = iter(cigar_split)
+            milestones = []
+            current_start = ref_start
+            current_end = ref_start
+            for c_int in cigar_iter:
+                c_int = int(c_int)
+                c = next(cigar_iter)
+                if c=='N':
+                    milestones.append([current_start,current_end])
+                    current_start = current_end + c_int
+                    current_end = current_start
+                elif c=='M' or c=='D':
+                    current_end += c_int
+            milestones.append([current_start,current_end])
+            ref_seq = ""
+            for m in milestones:
+                ref_seq = ref_seq + self.ref[ref_contig][m[0]:m[1]]
+        else:
+            cigar_iter = iter(cigar_split)
+            ref_increment = [int(x) for x in cigar_iter if increment_char(next(cigar_iter))]
+            ref_len = sum(ref_increment)
+            ref_seq = self.ref[ref_contig][ref_start:ref_start+ref_len]
         if rc:
             ref_seq = reverse_complement(ref_seq)
         if read_id in self.aln_dict.keys():
@@ -108,5 +141,5 @@ if __name__ == "__main__":
     #Example usage
     aln = Aligner("/home/heavens/UQ/Chiron_project/RNA_Analysis/RNA_Nanopore/references/sythetic.fasta")
     aln.parse_sam("/home/heavens/UQ/Chiron_project/RNA_Analysis/RNA_Nanopore/assess/out.sam")
-    save_aligner(aln,"/home/heavens/UQ/Chiron_project/RNA_Analysis/RNA_Nanopore/assess/aln.bin")
-    aln2 = load_aligner("/home/heavens/UQ/Chiron_project/RNA_Analysis/RNA_Nanopore/assess/aln.bin")
+    save_aligner(aln,"/home/heavens/UQ/Chiron_project/RNA_Analysis/RNA_Nanopore/resquiggle/aln.bin")
+    aln2 = load_aligner("/home/heavens/UQ/Chiron_project/RNA_Analysis/RNA_Nanopore/resquiggle/aln.bin")

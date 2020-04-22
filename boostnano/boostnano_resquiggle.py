@@ -1,16 +1,20 @@
 import h5py
 import os
 import shutil
-import mappy
 import re
 import argparse
 import numpy as np
 import subprocess
 import shlex
 import sys
-from multiprocessing import Pool
+import multiprocessing as mp
+from multiprocessing import Process
+from multiprocessing import Manager
+from multiprocessing import Semaphore
 import tqdm
 from boostnano.utils.sam_op import Aligner
+from boostnano.utils.sam_op import save_aligner
+from boostnano.utils.sam_op import load_aligner
 
 DATA_FORMAT = np.dtype([('raw','<i2'),
                         ('norm_raw','<f8'),
@@ -20,11 +24,9 @@ DATA_FORMAT = np.dtype([('raw','<i2'),
                         ('base','S1')]) 
 BASECALL_ENTRY = '/Analyses/Basecall_1D_000'
 RESQUIGGLE_METHODS = {'raw','cwdtw'}
-class RUN_RECORD():
-    def __init__(self):
-        self.fail_align = []
-        self.poor_qc = []
-        self.sucess = []
+FAIL_ALIGN = "Fail aligning to reference"
+POOR_QUALITY = "Poor quality reads"
+SUCCESS = "Suceed reads"
 
 def fast5s_iter(dest_link,tsv_table):
     """
@@ -51,9 +53,9 @@ def extract_fastq(input_f):
     with h5py.File(input_f,'r') as input_fh:
         raw_entry = list(input_fh['/Raw/Reads'].values())[0]
         read_id = raw_entry.attrs['read_id'].decode('utf-8')
-        raw_signal = raw_entry['Signal'].value
-        raw_seq = input_fh[BASECALL_ENTRY+'/BaseCalled_template/Fastq'].value
-        event = input_fh[BASECALL_ENTRY+'/BaseCalled_template/Events'].value
+        raw_signal = raw_entry['Signal'][()]
+        raw_seq = input_fh[BASECALL_ENTRY+'/BaseCalled_template/Fastq'][()]
+        event = input_fh[BASECALL_ENTRY+'/BaseCalled_template/Events'][()]
     return raw_signal,raw_seq,read_id,event
 
 def write_output(prefix,raw_signal,ref_seq):
@@ -145,26 +147,28 @@ def copy_raw(src_fast5,dest_fast5,raw):
         h5py.h5o.copy(root.id,b'UniqueGlobalKey',w_root.id,b'UniqueGlobalKey')
     return None
 
-def load_align(samfile,reference):
-#    ### Debug code begin ###
-#    from utils.sam_op import load_aligner
-#    aln = load_aligner("/home/heavens/UQ/Chiron_project/RNA_Analysis/RNA_Nanopore/assess/aln.bin")
-#    ### Debug code end ###
+def create_aligner(samfile,reference,save_f):
+    print("Read reference genome and create hash table.")
     aln = Aligner(reference)
+    print("Parse sam file.")
     aln.parse_sam(samfile)
-    return aln
+    save_aligner(aln,save_f)
+    return None
 
-def label(abs_fast5):
-    print(abs_fast5)
-    aln = load_align(args.samfile,args.reference)
+def label(abs_fast5,aligner,run_record,sema):
+    align_ids = aligner.aln_dict.keys()
     if abs_fast5.endswith("fast5"):
         filename = os.path.basename(abs_fast5)
         align = True
         if args.resquiggle_method == 'raw':
             align = False
         raw_signal,raw_seq,read_id,decap_event = extract_fastq(abs_fast5)
-        ref_seqs = aln.aln_dict[read_id]
         #Get ref sequence with max quality score.
+        if read_id not in align_ids:
+            run_record[FAIL_ALIGN] = run_record[FAIL_ALIGN] + [read_id]
+            sema.release()
+            return None
+        ref_seqs = aligner.aln_dict[read_id]
         ref_seq = max(ref_seqs,key = lambda x: x['map_score'])
         accum_step = np.pad(np.cumsum(decap_event['move']),(1,0),'constant',constant_values = (0,0))
         accum_loc = np.pad(np.cumsum(decap_event['length']),(1,0),'constant',constant_values = (0,0))
@@ -186,8 +190,6 @@ def label(abs_fast5):
             if ref_seq is not None:
                 input_cmd = write_output(prefix,decap_signal,ref_seq)
                 cmd = os.path.dirname(os.path.realpath(__file__))+"/utils/cwDTW_nano " + input_cmd +' -R ' + str(args.mode)
-#                print(cmd)
-#                raise ValueError
                 args_cmd = shlex.split(cmd)
                 p = subprocess.Popen(args_cmd,stdout = subprocess.PIPE,stderr = subprocess.STDOUT)
                 p_out,_ = p.communicate()
@@ -200,20 +202,46 @@ def label(abs_fast5):
             align_matrix = decap_event
         ######End cwDTW pipeline
         write_back(fast5_save,align_matrix,raw_seq,ref_seq,args.resquiggle_method)
+        run_record[SUCCESS] = run_record[SUCCESS] + [read_id]
+        sema.release()
 
 def run():
-#    pool = Pool(args.thread)
+    print("Create a aligner based on reference genomeand SAM file.")
+    aligner_f = os.path.join(args.saving,"aln.bin")
+#    create_aligner(args.samfile,args.reference,aligner_f)
+    aligner = load_aligner(aligner_f)
+    print("Aligner craeated successfully and is stored in %s"%(aligner_f))
+    
+    print("Run resquiggle.")
     filelist = []
+    manager = Manager()
+    sema = Semaphore(args.thread)
+    all_proc = []
+    log_dict = manager.dict()
+    log_dict[FAIL_ALIGN] = []
+    log_dict[SUCCESS] = []
+    log_dict[POOR_QUALITY] = []
     for path , _ , files in os.walk(args.input):
         for file in files:
             if file.endswith('fast5'):
                 filelist.append(os.path.join(path,file))
-    for file in filelist:
-        label(file)
-#    for _ in tqdm.tqdm(pool.imap_unordered(label,filelist),total = len(filelist)):
-#        pass
-#    pool.close()
-#    pool.join()          
+                
+#    ## Single thread test code###
+#    for file in filelist:
+#        label(file,aligner_f,log_dict,sema)
+#    ## test code end ###
+    
+    ### Multiple threads running code ###
+    for i,file in tqdm.tqdm(enumerate(filelist),total=len(filelist)):
+        sema.acquire()
+        p = Process(target = label, args = (file,aligner,log_dict,sema))
+        all_proc.append(p)
+        p.start()
+    for p in tqdm.tqdm(all_proc):
+        p.join()
+    for key in log_dict.keys():
+        print("%s:%d"%(key,len(log_dict[key])))
+    ### running code end ###
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='boostnano',
@@ -228,8 +256,8 @@ if __name__ == "__main__":
                         help="If RNA pore model is used, 0 for DNA pore model, 1 for 200mV RNA pore model, -1 for 180mV RNA pore model, DEFAULT is 0.")
     parser.add_argument('-s','--saving',
                         help="Output saving folder.")
-    parser.add_argument('-t','--thread',default = 1,type = int,
-                        help="Thread number.")
+    parser.add_argument('-t','--thread',default = 0,type = int,
+                        help="Thread number, default is 0, which uses all avamp.cpu_count()ilable cores.")
     parser.add_argument('--copy',dest = 'copy_original',action = 'store_true', 
                         help="If set, copy the original file else create a new fast5 file with raw_signal and resquiggle only.")
     parser.add_argument('--resquiggle_method',default = 'raw',choices = RESQUIGGLE_METHODS, 
@@ -237,7 +265,8 @@ if __name__ == "__main__":
     parser.add_argument('--for_eval',dest = 'eval',action = 'store_true',
                         help="If set, the SUFFCLIP and ADAPTER reads will also be included.")
     args = parser.parse_args(sys.argv[1:])
-    
+    if args.thread == 0:
+        args.thread = mp.cpu_count()
     if not os.path.isdir(args.saving):
         os.mkdir(args.saving)
     fast5_dir = os.path.join(args.saving,'fast5s')
