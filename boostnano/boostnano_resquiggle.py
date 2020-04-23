@@ -7,14 +7,16 @@ import numpy as np
 import subprocess
 import shlex
 import sys
+import queue
+import time
 import multiprocessing as mp
 from multiprocessing import Process
 from multiprocessing import Manager
-from multiprocessing import Semaphore
-import tqdm
+from multiprocessing import Queue
 from boostnano.utils.sam_op import Aligner
 from boostnano.utils.sam_op import save_aligner
 from boostnano.utils.sam_op import load_aligner
+from boostnano.utils.progress import multi_pbars
 
 DATA_FORMAT = np.dtype([('raw','<i2'),
                         ('norm_raw','<f8'),
@@ -27,7 +29,7 @@ RESQUIGGLE_METHODS = {'raw','cwdtw'}
 FAIL_ALIGN = "Fail aligning to reference"
 POOR_QUALITY = "Poor quality reads"
 SUCCESS = "Suceed reads"
-
+QUEUE_WAITING_TIME=2
 def fast5s_iter(dest_link,tsv_table):
     """
     An iterator iterate over the fast5 files.
@@ -155,91 +157,109 @@ def create_aligner(samfile,reference,save_f):
     save_aligner(aln,save_f)
     return None
 
-def label(abs_fast5,aligner,run_record,sema):
-    align_ids = aligner.aln_dict.keys()
-    if abs_fast5.endswith("fast5"):
-        filename = os.path.basename(abs_fast5)
-        align = True
-        if args.resquiggle_method == 'raw':
-            align = False
-        raw_signal,raw_seq,read_id,decap_event = extract_fastq(abs_fast5)
-        #Get ref sequence with max quality score.
-        if read_id not in align_ids:
-            run_record[FAIL_ALIGN] = run_record[FAIL_ALIGN] + [read_id]
-            sema.release()
+def label_worker(file_queue,aligner,run_record,p_id):
+    while True:
+        try:
+            abs_fast5 = file_queue.get(timeout = QUEUE_WAITING_TIME)
+        except queue.Empty:
+            print("No file in the queue, worker %d shut down."%(p_id))
             return None
-        ref_seqs = aligner.aln_dict[read_id]
-        ref_seq = max(ref_seqs,key = lambda x: x['map_score'])
-        accum_step = np.pad(np.cumsum(decap_event['move']),(1,0),'constant',constant_values = (0,0))
-        accum_loc = np.pad(np.cumsum(decap_event['length']),(1,0),'constant',constant_values = (0,0))
-        signal_start = accum_loc[accum_step>=ref_seq['query_offset'][0]][0]
-        signal_end = accum_loc[accum_step<=ref_seq['query_offset'][1]][-1]
-        decap_signal = raw_signal[signal_start:signal_end]
-        if args.mode == 1 or args.mode == -1:
-            decap_signal = decap_signal[::-1]
-        ref_seq = ref_seq['reference_sequence']
-        prefix = os.path.join(args.saving,'resquiggle',os.path.splitext(filename)[0])
-        fast5_save = os.path.join(args.saving,'fast5s',filename)
-        if args.copy_original:
-            shutil.copyfile(abs_fast5,fast5_save)
-        else:
-            copy_raw(abs_fast5,fast5_save,raw_signal)
-        
-        ######Begin cwDTW pipeline
-        if args.resquiggle_method == 'cwdtw':
-            if ref_seq is not None:
-                input_cmd = write_output(prefix,decap_signal,ref_seq)
-                cmd = os.path.dirname(os.path.realpath(__file__))+"/utils/cwDTW_nano " + input_cmd +' -R ' + str(args.mode)
-                args_cmd = shlex.split(cmd)
-                with subprocess.Popen(args_cmd,stdout = subprocess.PIPE,stderr = subprocess.STDOUT) as p:
-                    p_out,_ = p.communicate()
-                align_matrix = parse_cwDTW(prefix+'.aln')
+        if abs_fast5.endswith("fast5"):
+            filename = os.path.basename(abs_fast5)
+            raw_signal,raw_seq,read_id,decap_event = extract_fastq(abs_fast5)
+            prefix = os.path.join(args.saving,'resquiggle',os.path.splitext(filename)[0])
+            fast5_save = os.path.join(args.saving,'fast5s',filename)
+            if args.copy_original:
+                shutil.copyfile(abs_fast5,fast5_save)
             else:
-                pass
-#                return
-        elif args.resquiggle_method == 'raw':
-            align_matrix = decap_event
-        ######End cwDTW pipeline
-        write_back(fast5_save,align_matrix,raw_seq,ref_seq,args.resquiggle_method)
-        run_record[SUCCESS] = run_record[SUCCESS] + [read_id]
-        sema.release()
+                copy_raw(abs_fast5,fast5_save,raw_signal)
+            
+            ######Begin cwDTW pipeline
+            if args.resquiggle_method == 'cwdtw':
+                align_ids = aligner.aln_dict.keys()
+                if read_id not in align_ids:
+                    run_record[FAIL_ALIGN] = run_record[FAIL_ALIGN] + [read_id]
+                    continue
+                ref_seqs = aligner.aln_dict[read_id]
+                ref_seq = max(ref_seqs,key = lambda x: x['map_score'])
+                accum_step = np.pad(np.cumsum(decap_event['move']),(1,0),'constant',constant_values = (0,0))
+                accum_loc = np.pad(np.cumsum(decap_event['length']),(1,0),'constant',constant_values = (0,0))
+                signal_start = accum_loc[accum_step>=ref_seq['query_offset'][0]][0]
+                signal_end = accum_loc[accum_step<=ref_seq['query_offset'][1]][-1]
+                decap_signal = raw_signal[signal_start:signal_end]
+                if args.mode == 1 or args.mode == -1:
+                    decap_signal = decap_signal[::-1]
+                ref_seq = ref_seq['reference_sequence']
+                if ref_seq is not None:
+                    input_cmd = write_output(prefix,decap_signal,ref_seq)
+                    cmd = os.path.dirname(os.path.realpath(__file__))+"/utils/cwDTW_nano " + input_cmd +' -R ' + str(args.mode)
+                    args_cmd = shlex.split(cmd)
+                    with subprocess.Popen(args_cmd,
+                                          stdout = subprocess.PIPE,
+                                          stderr = subprocess.STDOUT,
+                                          close_fds = True) as p:
+                        p_out,_ = p.communicate()
+                        p.stdout.close()
+                        p.terminate()
+                    align_matrix = parse_cwDTW(prefix+'.aln')
+                else:
+                    run_record[FAIL_ALIGN] = run_record[FAIL_ALIGN] + [read_id]
+                    continue
+            elif args.resquiggle_method == 'raw':
+                align_matrix = decap_event
+                ref_seq = 'aaa'
+            ######End cwDTW pipeline
+            write_back(fast5_save,align_matrix,raw_seq,ref_seq,args.resquiggle_method)
+            run_record[SUCCESS] = run_record[SUCCESS] + [read_id]
 
 def run():
     print("Create a aligner based on reference genomeand SAM file.")
     aligner_f = os.path.join(args.saving,"aln.bin")
-    create_aligner(args.samfile,args.reference,aligner_f)
+#    create_aligner(args.samfile,args.reference,aligner_f)
     aligner = load_aligner(aligner_f)
     print("Aligner craeated successfully and is stored in %s"%(aligner_f))
     
     print("Run resquiggle.")
-    filelist = []
-    manager = Manager()
-    sema = Semaphore(args.thread)
+    file_queue = Queue()
+    file_list =[]
     all_proc = []
+    manager = Manager()
     log_dict = manager.dict()
     log_dict[FAIL_ALIGN] = []
-    log_dict[SUCCESS] = []
     log_dict[POOR_QUALITY] = []
+    log_dict[SUCCESS] = []
+    titles = [FAIL_ALIGN,POOR_QUALITY,SUCCESS,'Total']
+    pbars = multi_pbars(titles)
+    print(titles)
     for path , _ , files in os.walk(args.input):
         for file in files:
             if file.endswith('fast5'):
-                filelist.append(os.path.join(path,file))
-                
+                file_queue.put(os.path.join(path,file))
+                file_list.append(file)
 #    ## Single thread test code###
 #    for file in filelist:
 #        label(file,aligner_f,log_dict,sema)
 #    ## test code end ###
     
     ### Multiple threads running code ###
-    for i,file in tqdm.tqdm(enumerate(filelist),total=len(filelist)):
-        sema.acquire()
-        p = Process(target = label, args = (file,aligner,log_dict,sema))
+    for i in range(args.thread):
+        p = Process(target = label_worker, args = (file_queue,aligner,log_dict,i))
         all_proc.append(p)
         p.start()
-    for p in tqdm.tqdm(all_proc):
+    while any([x.is_alive() for x in all_proc]):
+        time.sleep(0.1)
+        total_finish = 0
+        for key in log_dict.keys():
+            total_finish += len(log_dict[key])
+        for key in log_dict.keys():
+            pbars.update(titles.index(key),len(log_dict[key]),total_finish)
+        pbars.update(titles.index('Total'),total_finish,len(file_list))
+        pbars.refresh()
+    for p in all_proc:
         p.join()
     for key in log_dict.keys():
         print("%s:%d"%(key,len(log_dict[key])))
+        
     ### running code end ###
     
 if __name__ == "__main__":
