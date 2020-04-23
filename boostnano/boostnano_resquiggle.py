@@ -215,7 +215,7 @@ def label_worker(file_queue,aligner,run_record,p_id):
 def run():
     print("Create a aligner based on reference genomeand SAM file.")
     aligner_f = os.path.join(args.saving,"aln.bin")
-#    create_aligner(args.samfile,args.reference,aligner_f)
+    create_aligner(args.samfile,args.reference,aligner_f)
     aligner = load_aligner(aligner_f)
     print("Aligner craeated successfully and is stored in %s"%(aligner_f))
     
@@ -230,7 +230,6 @@ def run():
     log_dict[SUCCESS] = []
     titles = [FAIL_ALIGN,POOR_QUALITY,SUCCESS,'Total']
     pbars = multi_pbars(titles)
-    print(titles)
     for path , _ , files in os.walk(args.input):
         for file in files:
             if file.endswith('fast5'):
