@@ -82,7 +82,7 @@ class evaluator(object):
         result_tuple = hmm.decode(logits)
         return result_tuple
     
-def fast5_iter(fast5_dir,mode = 'r'):
+def fast5_iter_old(fast5_dir,mode = 'r'):
     for (dirpath, dirnames, filenames) in os.walk(fast5_dir+'/'):
         for filename in filenames:
             if not filename.endswith('fast5'):
@@ -96,6 +96,23 @@ def fast5_iter(fast5_dir,mode = 'r'):
                 signal = np.asarray(read_h[('Signal')],dtype = np.float32)
             read_id = read_h.attrs['read_id']
             yield read_h,signal,abs_path,read_id.decode("utf-8")
+            
+def fast5_iter(fast5_dir,mode = 'r'):
+    for (dirpath, dirnames, filenames) in os.walk(fast5_dir+'/'):
+        for filename in filenames:
+            if not filename.endswith('fast5'):
+                continue
+            abs_path = os.path.join(dirpath,filename)
+            root = h5py.File(abs_path,mode = mode)
+            for read_id in root:
+                read_h = root[read_id]['Raw']
+                if 'Signal_Old' in read_h:
+                    signal = np.asarray(read_h[('Signal_Old')],dtype = np.float32)
+                else:
+                    signal = np.asarray(read_h[('Signal')],dtype = np.float32)
+                read_id = read_h.attrs['read_id']
+                yield read_h,signal,abs_path,read_id.decode("utf-8")
+    
     
 def trace(net, example_input):
     traced_model = torch.jit.trace(net,example_input)
@@ -108,7 +125,10 @@ def main():
         mode = 'a'
     else:
         mode = 'r'
-    iterator = fast5_iter(FLAGS.input_fast5,mode=mode)
+    if FLAGS.single_read:
+        iterator = fast5_iter_old(FLAGS.input_fast5,mode = mode)
+    else:
+        iterator = fast5_iter(FLAGS.input_fast5,mode=mode)
     if not os.path.isdir(FLAGS.output_folder):
         os.mkdir(FLAGS.output_folder)
     output_f = os.path.join(FLAGS.output_folder, 'out.csv')
@@ -190,6 +210,9 @@ if __name__ == "__main__":
     parser.add_argument('--replace',
                         action = 'store_true',
                         help = "If true, then replace the signal in the fast5 files in place.")
+    parser.add_argument('--single_read',
+                        action = 'store_true',
+                        help = "If true, each fast5 file contain only 1 read (the older version fast5 file).")
     ##TODO Multiple threading need to be added.
     FLAGS = parser.parse_args(sys.argv[1:])
     if (FLAGS.device != "cpu") and (FLAGS.device is not None) and (not FLAGS.device.startswith("cuda:")):
