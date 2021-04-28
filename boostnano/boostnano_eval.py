@@ -103,7 +103,11 @@ def fast5_iter(fast5_dir,mode = 'r'):
             if not filename.endswith('fast5'):
                 continue
             abs_path = os.path.join(dirpath,filename)
-            root = h5py.File(abs_path,mode = mode)
+            try:
+                root = h5py.File(abs_path,mode = mode)
+            except OSError as e:
+                print("Reading %s failed due to %s."%(abs_path,e))
+                continue
             for read_id in root:
                 read_h = root[read_id]['Raw']
                 if 'Signal_Old' in read_h:
