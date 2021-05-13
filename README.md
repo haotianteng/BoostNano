@@ -3,7 +3,7 @@
 
 ## Installation
 git clone https://github.com/haotianteng/BoostNano.git  
-python BoostNano/setup.py install
+python BoostNano/setup.py install  
 Install [Pytorch](https://pytorch.org/)  
 Add BoostNano path into Python path: export PYTHONPATH=PATH_TO_BOOSTNANO  
 
