@@ -4,10 +4,10 @@
 ## Installation
 ```python
 git clone https://github.com/haotianteng/BoostNano.git  
+conda activate YOUR_VIRTUAL_ENVIRONMENT
 python BoostNano/setup.py install  
 ```
 Install [Pytorch](https://pytorch.org/)  
-Add BoostNano path into Python path: export PYTHONPATH=PATH_TO_BOOSTNANO  
 
 ## Code Example
 Check out the sample code in the Jupyter Notebook Sample.ipynb for how to use the package.  
