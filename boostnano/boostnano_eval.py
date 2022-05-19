@@ -95,7 +95,8 @@ def fast5_iter_old(fast5_dir,mode = 'r'):
             else:
                 signal = np.asarray(read_h[('Signal')],dtype = np.float32)
             read_id = read_h.attrs['read_id']
-            yield read_h,signal,abs_path,read_id.decode("utf-8")
+            read_id = read_id if type(read_id) is str else read_id.decode()
+            yield read_h,signal,abs_path,read_id
             
 def fast5_iter(fast5_dir,mode = 'r'):
     for (dirpath, dirnames, filenames) in os.walk(fast5_dir+'/'):
