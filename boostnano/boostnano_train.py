@@ -87,7 +87,6 @@ class trainer(object):
                     self.save()
                     eval_i,valid_batch = next(enumerate(self.eval_ds))
                     valid_error = self.valid_step(valid_batch)
-                    print(valid_error)
                     print("Epoch %d Batch %d, loss %f, error %f, valid_error %f"%(epoch_i, i_batch, loss,np.mean(error),np.mean(valid_error)))
                 optimizer.step()
                 self.global_step +=1
@@ -162,9 +161,9 @@ class DeviceDataLoader():
             return torch.device('cpu')
 
 if __name__ == "__main__":
-    train_dir = '/home/heavens/UQ/Chiron_project/boostnano/training_data/test/'
-    eval_dir = '/home/heavens/UQ/Chiron_project/boostnano/training_data/eval/'
-    test_file = "/home/heavens/UQ/Chiron_project/boostnano/training_data/training.csv"
+    train_dir = '../training_data/trainning_single_reads/'
+    eval_dir = '../training_data/trainning_single_reads/'
+    test_file = "../training_data/trainning_single_reads/adapter_location.csv"
 #    data = read_csv(test_file,root_dir)
     d1 = ni.dataset(train_dir,transform=transforms.Compose([ni.DeNoise((0,900)),
                                                         ni.WhiteNoise(200,0.2),
@@ -186,8 +185,8 @@ if __name__ == "__main__":
     global_step = 0
     optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
     COUNT_CYCLE = 10
-    t.load("/home/heavens/UQ/Chiron_project/boostnano/training_data/test/model/")
-    t.train(epoches,optimizer,COUNT_CYCLE,"/home/heavens/UQ/Chiron_project/boostnano/training_data/test/model/")
+    t.load("../model/")
+    t.train(epoches,optimizer,COUNT_CYCLE,"../model/")
 
     
     

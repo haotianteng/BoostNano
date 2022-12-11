@@ -137,20 +137,17 @@ class dataset(data.Dataset):
             next(f)
             for line in tqdm(f):
                 split_line = line.strip().split(',')
-                locs = [float(x) for x in split_line[2:]]
+                #take care of None in the split_line
+                locs = [float(x) if x!='None' else None for x in split_line[1:]]
+                if None in locs:
+                    continue
                 self.labels.append([split_line[0]]+locs)
                 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        sig_f = os.path.join(self.sig_folder,
-                                self.labels[idx][0])
-        with open(sig_f,'r') as f:
-            next(f)
-            for line in f:
-                sig = line.strip().split(',')
-                sig = np.asarray([int(x) for x in sig],dtype=np.float32)
+        read_id,sig = _read_fast5(self.labels[idx][0])
         sample = {'signal': sig, 
                   'landmarks': np.asarray(self.labels[idx][1:4],dtype=np.float32)}
         if self.transform:
@@ -266,8 +263,8 @@ class ToTensor(object):
                 'class':torch.from_numpy(sample['class'],)}
 
 if __name__ == "__main__":
-    root_dir = '/home/heavens/UQ/Chiron_project/boostnano/training_data/test/'
-    test_file = "/home/heavens/UQ/Chiron_project/boostnano/training_data/training.csv"
+    root_dir = '/home/heavens/Tools/BoostNano/training_data/trainning_single_reads/'
+    test_file = "/home/heavens/Tools/BoostNano/training_data/trainning_single_reads/adapter.csv"
 #    data = read_csv("/home/heavens/UQ/Chiron_project/boostnano/training_data/result_soeyoung.csv",'/home/heavens/UQ/Chiron_project/boostnano/training_data/eval')
 #    data = read_csv(test_file,root_dir)
     d1 = dataset(root_dir,transform=transforms.Compose([DeNoise((200,1200)),
