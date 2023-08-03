@@ -11,7 +11,7 @@ setup(
 	ext_modules = ext_modules,
 	packages=find_packages(),
     package_data={
-        'boostnano': ['model/*'],  # Include all .txt files under the 'data' directory
+        'boostnano': ['boostnano/model/*'],  # Include all .txt files under the 'data' directory
     },
     include_package_data=True,
 )

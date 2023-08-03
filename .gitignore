@@ -3,3 +3,4 @@ boostnano.egg*
 *.cpython*
 *.so
 *.csv
+dist/
