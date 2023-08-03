@@ -2,12 +2,12 @@ from setuptools import find_packages
 from distutils.core import setup, Extension
 import numpy as np
 
-ext_modules = [ Extension('boostnano.hmm', sources = ['boostnano/hmm.cpp'],language='c++')]
+ext_modules = [ Extension('boostnano.hmm', sources = ['boostnano/hmm.cpp'],language='c++',include_dirs=['boostnano'])]
 exec(open('boostnano/_version.py').read()) #readount the __version__ variable
 setup(
 	name = 'boostnano',
 	version = __version__,
-	include_dirs = [np.get_include()],
+	include_dirs = [np.get_include(),'boostnano'],
 	ext_modules = ext_modules,
 	packages=find_packages(),
     package_data={
