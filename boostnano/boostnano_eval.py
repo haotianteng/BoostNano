@@ -140,22 +140,24 @@ def main():
     with open(output_f,'w+') as out_f:
         for read_h,signal,fast5_f,read_id in tqdm(iterator):
             (decoded,path,locs) = ev.eval_sig(signal,FLAGS.segment_length)
-            if 'Signal' in read_h:
-                del read_h['Signal']    
-            if 'Signal_Old' in read_h:
-                del read_h['Signal_Old']
-            old_h = read_h.create_dataset('Signal_Old', shape = (len(signal),),maxshape=(None,),dtype = np.dtype(np.int16))
+            if FLAGS.replace:
+                if 'Signal' in read_h:
+                    del read_h['Signal']    
+                if 'Signal_Old' in read_h:
+                    del read_h['Signal_Old']
+                old_h = read_h.create_dataset('Signal_Old', shape = (len(signal),),maxshape=(None,),dtype = np.dtype(np.int16))
             transcription = signal[int(locs[0]):] 
             ### Set a minimum length for Guppy to work###
             if len(transcription) < MINIMUM_LEN:
                 transcription = np.concatenate((transcription, [np.mean(transcription)]*(MINIMUM_LEN - len(transcription))))         
             ###
-            new_h = read_h.create_dataset('Signal', shape = (len(transcription),),maxshape=(None,),dtype = np.dtype(np.int16))
-            read_attrs = read_h.attrs
-            read_attrs.modify('duration',len(transcription))
-            old_h[:] = np.asarray(signal,dtype = np.int16)
+            if FLAGS.replace:
+                new_h = read_h.create_dataset('Signal', shape = (len(transcription),),maxshape=(None,),dtype = np.dtype(np.int16))
+                read_attrs = read_h.attrs
+                read_attrs.modify('duration',len(transcription))
+                old_h[:] = np.asarray(signal,dtype = np.int16)
 #            new_h[:] = np.asarray(np.concatenate((transcription,[0]*(len(signal) - len(transcription)))),dtype = np.int16)
-            new_h[:] = np.asarray(transcription, dtype = np.int16)
+                new_h[:] = np.asarray(transcription, dtype = np.int16)
             out_f.write(','.join([fast5_f]+[read_id]+[str(x) for x in locs])+'\n')
             if FLAGS.replace:
                 if len(locs)<3:
