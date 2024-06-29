@@ -17,12 +17,13 @@ Check out the sample code in the Jupyter Notebook Sample.ipynb for how to use th
 
 ## Usage
 ### Inference
-```python
-python boostnano_eval.py -i INPUT_FAST5_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER
-```
 *Replace the raw signal in the fast5 files for basecalling:*
 ```python
 python boostnano_eval.py -i INPUT_FAST5_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER --replace
+```
+Or you just want to get the segmentation result in output.csv without modifying the original fast5 files:
+```python
+python boostnano_eval.py -i INPUT_FAST5_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER
 ```
 A pretrained model is already shipped in boostnan/models, you can use it directly.
 *Notice*: This will save the segmented siganl in to the original Signal Slot in the fast5 files, and copy the old signal into the Signal_Old slot, so a basecaller can directly run on the processed fast5 files.
