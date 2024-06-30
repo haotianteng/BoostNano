@@ -1,5 +1,5 @@
 # BOOSTNANO
-## BOOSTNANO is a tool for preprocessing ONT-Nanopore RNA sequencing reads(before basecalling), it segmentates the adapter, polyA stall and the transcription from the raw signal.
+## BOOSTNANO is a tool for preprocessing ONT-Nanopore RNA sequencing reads(before basecalling), it segments/trims the adapter, polyA stall, and the transcription from the raw signal before the basecalling.
 
 BoostNano is part of the [Chiron](https://github.com/haotianteng/Chiron) project, if you found BoostNano useful please consider to cite the Chiron paper:
 > Haotian Teng, Minh Duc Cao, Michael B Hall, Tania Duarte, Sheng Wang, Lachlan J M Coin; Chiron: translating nanopore raw signal directly into nucleotide sequence using deep learning, GigaScience, Volume 7, Issue 5, 1 May 2018, giy037, https://doi.org/10.1093/gigascience/giy037
