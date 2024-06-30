@@ -17,7 +17,7 @@ Check out the sample code in the Jupyter Notebook Sample.ipynb for how to use th
 
 ## Usage
 ### Inference
-*Replace the raw signal in the fast5 files for basecalling:*
+*Replace the raw signal in the fast5 files for basecalling (trim the adapter and polyA tail signal):*
 ```python
 python boostnano_eval.py -i INPUT_FAST5_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER --replace
 ```
