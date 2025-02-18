@@ -11,6 +11,9 @@ conda activate YOUR_VIRTUAL_ENVIRONMENT
 python BoostNano/setup.py install  
 ```
 Install [Pytorch](https://pytorch.org/)  
+Boostnano only works with Python < 3.9. Tested on Python 3.8 and 3.7. Install PyTorch version accordingly.  
+We tested Boostnano on Ubuntu 16.04/18.04/20.04, and it should work on other Linux distributions. 
+We haven't tested it on MacOS or Windows, but it should work under a conda environment. Raise an issue if you found problem running Boostnano on other platform.  
 
 ## Code Example
 Check out the sample code in the Jupyter Notebook Sample.ipynb for how to use the package.  
